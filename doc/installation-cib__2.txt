@@ -1,0 +1,12 @@
+digraph transformation {
+  rankdir =LR
+  node [shape=box,color=darkorange]
+  read_sales_data [label= "Read Sales Data"]
+  zip_missing [label= "Zip missing?", shape=diamond]
+  lookup_zip_code [label = "Lookup Zip code"]
+  load_data [label = "Load Data"]
+
+  read_sales_data -> zip_missing
+  zip_missing -> lookup_zip_code [label = "yes"]
+  zip_missing -> load_data [label = "No"]
+  lookup_zip_code -> load_data
