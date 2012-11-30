@@ -1,0 +1,1 @@
+a2x -a docinfo -v -L -fpdf -dbook --icons -D doc --dblatex-opts="-T simple -P table.in.float=1 -P latex.output.revhistory=1 -P doc.publisher.show=0  -P xref.with.number.and.title=1 -P xref.hypermarkup=0 -P table.title.top=0 -I /etc/asciidoc/images/icons" installation-cib.txt
