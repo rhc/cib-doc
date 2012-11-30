@@ -1,0 +1,2589 @@
+= CiB installation manual
+Christian Kyony <ckyony@africacentre.ac.za>
+// vim: ft=asciidoc:tw=78:
+:keywords: CIB, installation, iSHARE2
+
+// substitution
+
+:ip-range: 172.18.21.165-179
+:ip-gateway: 172.18.21.1
+:primary-dns: 172.18.20 11
+:secondary-dns: 172.18.20.12
+:public-otrs-ip: 196.15.226.163
+
+
+
+:archive-ip-address: 172.18.20.191
+:db-ip-address: 172.18.20.xxx
+:dm-ip-address: 172.18.20.xxx
+:sysadm-ip-address: 172.18.20.xxx
+:web-ip-address: 172.18.20.xxx
+:netmask: 255.255.254.0
+:primary-name-server-ip-address: 172.18.20.11
+:secondary-name-server-ip-address: 172.18.20.12
+:operational-database-server: 172.18.20.14
+:nada-ip-address: 172.18.21.232
+:nada-install-dir: /var/www/nada/
+
+:helpdesk: help@indepth-ishare.org
+:code-site: ZA031
+:sqljdbc: sqljdbc_4.0.2206.100_enu.exe
+:jre: 
+:pentaho-install-dir: C:\Pentaho\
+:pdi-ce: pdi-ce-4.3.0-stable
+:jre: jre-6u37-windows-x64.exe
+:zotero-xpi: zotero-3.0.8(1).xpi
+:zotero-windows: Zotero-3.0.8_setup (1).exe
+:zotero-linux: Zotero-3.0.8_linux-x86_64.tar.bz2.tar.bz2.tar.bz2
+
+== Introduction 
+
+This manual describes how to install and configure  a 'Centre-in-a-box' or
+'CiB' on a Mac Mini server.
+
+At a high level of abstraction, the CiB solution consists of several application servers running on
+Windows or Linux virtual machines. The virtual machines are hosted by a VMware
+ESXi hypervisor. The hypervisor sits on top of the physical hardware  as shown in
+the figure below.
+
+
+.CiB components
+[graphviz]
+-----------------
+digraph cib {
+
+  subgraph cluster3 {
+    node [style=filled,shape = box, color=darkorange];
+    style = dotted;
+    color = orange;
+    label = "Application servers";
+    archive 
+    nada
+    dm
+    sysadm
+    database
+  }
+
+  subgraph cluster2 {
+    node [style=filled, shape = box, color = steelblue];
+    color = steelblue;
+    style = dotted
+    label = "Guest operating systems"
+    linux1
+    linux2
+    windows1
+    windows2
+    windows3
+  }
+
+  subgraph cluster1 {
+    node [style=filled, shape= box,color = purple ];
+    style = dotted
+    color = purple;
+    label = "Hypervisor"
+    esxi
+  }
+
+  subgraph cluster0 {
+    node [style=filled, shape=box];
+    style = dotted
+    color = lightgrey
+    label = "Hardware"
+    macmini
+  }
+
+
+  linux1 [label=Ubuntu]
+  linux2 [label=Ubuntu]
+  windows1 [label= "Windows"]
+  windows2 [label= "Windows"]
+  windows3 [label= "Windows"]
+
+  esxi [label = "VMware ESXi"] 
+
+  macmini [label = "Mac Mini Server"]
+
+  database [label= "Database server"]
+  sysadm [label = "SysAdmin desktop"]
+  dm [label = "Data manager desktop"]
+  nada [label = "Web/NADA server"]
+  archive [label = "Samba/File server"]
+
+  archive -> linux1 [dir=none]
+  nada -> linux2 [dir=none]
+  dm -> windows1 [dir=none]
+  sysadm -> windows2 [dir=none]
+  database -> windows3 [dir=none]
+  
+  linux1 -> esxi [dir=none]
+  linux2 -> esxi [dir=none]
+  windows1 -> esxi [dir=none]
+  windows2 -> esxi [dir=none]
+  windows3 -> esxi [dir=none]
+
+  esxi -> macmini [dir=none]
+ }
+-----------------
+
+Our objective is to setup those application servers ( Samba file, ETL, NADA, SystemAdmin,) 
+by preparing the Mac Mini Server hardware, then installing the VMWare ESXi hypervisor 
+followed by the setup of the guest operating systems (Windows 7 or Linux
+Ubuntu).
+
+
+The manual includes the following topics: 
+
+. Preparing for the installation
+. Installing the hypervisor host
+. Install the virtual machines as guests.
+. Configuring the Archive server
+. Configuring the NADA server
+. Configuring the Database server 
+. Configuring the Data Manager desktop
+. Configuring the System admin desktop
+
+
+The intended audience is anyone who needs to install and setup a CiB.
+The information is written for Windows or Linux system administrators who
+have a basic knowledge of virtual machine technology, operating systems and
+database administration.
+
+
+== Preparing for the installation
+
+Before starting the installation, 
+ensure that you have the correct hardware and software pre-requisites.
+
+
+=== Check the hardware pre-requisites
+
+Ensure that you have the following equipment:
+
+- Apple Mac Mini Server 2011, 2.0GHz quad-core, Intel Core i7, Hard drive
+  500GB/700GB
+- 2 x 8G RAM 
+- Apple Super Drive 
+- Standard Windows USB keyboard 
+- Standard USB 2-button mouse
+- HDMI to DVI cable 
+- Monitor with DVI interface 
+- Ethernet Network cable 
+- Laptop or workstation with Windows XP/7 Operating systems
+
+//todo: add pictures with all hardware pre-requisites
+
+
+=== Check the software pre-requisites 
+
+You should have access to a local or network folder with the following
+softwares:
+
+- For the hypervisor installation:
+ * VMware ESXi 5.0.0-469512 ISO burned on CD-ROM 
+ * Broadcom NIC driver DD for Broadcom NetXtreme | Gigabit Ethernet Driver version 3.120h.v50.2 build 547149 
+ * VMware vSphere client version 5.0
+ * Account to register the VMware host
+
+- For the guest operating system installation:
+ * Windows 7 Professional 64-bit edition ISO + valid licenses
+ * Ubuntu 2012-04 LTS 4-bit edition ISO
+
+- For the archive server installation: 
+ * Samba
+ * Git 
+ * ftp
+
+
+- For the NADA server installation:
+ * NADA
+ * MySql version 5.5
+ * PHP 
+ * Apache 
+
+- For the database server installation:
+ * Microsoft SQL Express 2008 R2 with tools
+ * MySQL version 5.5
+
+- For the Data Manager desktop installation:
+ * Pentaho Kettle Community edition version 4.3.0-stable
+ * Nesstar Publisher 
+ * Firefox
+
+
+- For the system administration desktop installation:
+
+ * vSphere Client version 5.0
+ * WireShark 64-bit version 1.80 
+ * GuettoVCB 
+
+
+
+
+=== Check the network setting pre-requisites
+Your local network administrator should provide the following information:
+
+- CiB IP address :
+- Subnet net address:
+- gateway IP address:
+- Primary name servers: 
+- Secondary name servers:
+
+- IP address for each virtual machine
+- Http proxy if needed to access Internet
+- Domain administrator rights to join machines to the domain
+
+
+== Hypervisor host installation
+
+In this step, you are going to uninstall the built-in Apple Lion server
+operating systems and replace it by the VMware ESXi 5 operating system.
+
+//Add pictures with hardware / hyper-visor host / virtual machine guests
+
+The instruction below are adapted from the expert advices found on Paraguin consulting 
+http://paraguin.com/2012/01/10/the-mac-mini-vmware-esxi-5-server-part-2-installation[blog] .
+
+This is a first version with a combination of GUI mouse clicks and CLI keystrokes. 
+The entire process should take about 1 hour on the first attempt
+but less than 20 minutes when one becomes more familiar with the process. 
+
+
+=== Check that the mac mini is working fine with the pre-installed OSX
+
+If you receive a brand new Mac Mini server, boot it to check that the new box is working 
+fine.
+
+- Connect the keyboard, the mouse, the network cable and power cable.
+- Press the power button.
+- Follow the instructions.
+
+- Check the network settings.
+- Setup the proxy settings.
+- Check your connection to internet.
+
+
+=== Start the installation
+
+- Plug the Super Drive into the Mac Mini
+- Load the VMware ESXi installation CD into the SuperDrive
+- Press <Alt> while powering on the Mac Mini
+- Choose the EFI option
+
+The system will load the CD and start the vmware setup process.
+
+image:images/install-01.jpg[starting the loading]
+
+The VMware setup will start
+
+image:images/install-02.jpg[vmware-setup-start]
+
+
+After a moment, you should see the "Welcome to the VMWare ESXi 5 installation dialog. 
+
+
+image:images/install-03.jpg[welcome]
+
+- Press <Enter> to continue
+
+image:images/install-04.jpg[EULA]
+
+- Press <F11> to accept the EULA
+
+
+
+The drive selection dialog will appear. 
+
+image:images/install-05.jpg[drive selection]
+
+- Press <Enter> to Select the first drive in the array to install ESXi
+
+
+image:images/install-06.jpg[drive selection]
+
+- Press <Enter> to confirm the disk selection 
+
+image:images/install-07.jpg[keyboard selection]
+
+- Select the US default keyboard layout 
+
+
+You can now setup the password 
+
+image:images/install-08.jpg[root password]
+
+
+- Setup the root password to _T3amw0rk_
+- Confirm the root password 
+
+Confirm the installation as the disks will get repartitioned.
+
+- Hit the <F11> key to start the installation
+
+image:images/install-09.jpg[start installation]
+
+Wait while the installation is progressing
+
+image:images/install-10.jpg[progress bar]
+
+Once the installation is complete, 
+
+- Unplug the Super Drive before rebooting
+- Hit the <Enter> key to perform the required reboot
+
+
+image:images/install-11.jpg[welcome]
+
+
+=== Enable ESXi shell
+
+The system has booted up at this point. 
+You should be able to see the VMware screen.
+
+image:images/install-12.jpg[configuration screen]
+
+
+- Hit <F2> to go to  the "system customization" 
+
+- Enter the root password (e.g. T3amw0rk)
+
+
+image:images/install-13.jpg[root login]
+
+
+
+- Press <enter> to Select "Troubleshooting options"
+
+
+//image:images/install-14.jpg[troubleshooting mode options]
+
+- Press <enter> to enable ESXi shell
+- Press <esc> to apply the changes
+- press <alt> + <F1> to go to the shell
+- login as root
+
+
+image:images/install-15.jpg[login shell]
+
+=== Update the Broadcom NIC driver
+
+- Plug the SuperDrive to your Windows workstation
+- Eject the VMware ESXi setup CD-ROM
+- Insert the Broadcom NIC driver CD-ROM
+
+
+The following are the commands of how to mount the CD from the SuperDrive, copy
+the driver over to the local system, update the driver on the system, and then
+reboot.  
+
+- load the VMKernel module
+
+--------
+# vmkload_mod iso9660
+---------
+
+You should get the message 'Module iso9660 loaded successfully'
+
+- Mount the CD 
+
+--------
+# vsish -e set /vmkModules/iso9660/mount $(esxcfg-mpath -b | grep "CD-ROM" | awk '{print $1}')
+---------
+
+- Unzip the TG3*.zip file to a temp directory
+
+--------
+# mkdir /tmp-brcm-driver
+# cp /vmfs/volumes/mpx.vmhba32XXXXX/TG3312~1.ZIP /tmp-brcm-driver
+# cd /tmp-brcm-driver
+# unzip TG3312~1.ZIP
+---------
+
+- Copy the offline bundle zip to /var/log/vmware 
+
+--------
+# cp tg3-3.120h.v50.2-offline_bundle-547149.zip /var/log/vmware
+---------
+
+- Perform the driver upgrade and reboot
+
+--------
+# esxcli software vib install --no-sig-check --maintenance-mode -d tg3-3.120.h.v50.2-offline-bundle-547149.zip
+# reboot
+---------
+
+=== Configure and test the network settings
+
+- Hit <F2> in order to go into the configuration
+- Set the root password to T3amw0rk
+- Select "Configure management network"
+
+image:images/system-customization.jpg[System customization]
+
+
+image:images/ip-configuration.jpg[IP configuration]
+
+- Set a static IP address with the information given by the network administrator.
+
+In this instance, I used the following data:
+
+------
+address               : 172.18.21.251
+netmask               : {netmask}
+gateway               : {gateway-ip-address}
+Primary name server   : {primary-name-server-ip-address}
+Secondary name server : {secondary-name-server-ip_address}
+hostname              : acs-cib.africacentre.local
+-----
+
+- Press <ESC> to go back to the "system customization screen"
+- Press <Y> to apply the changes and restart management network 
+
+- Select "Test configuration".
+
+[[Install-vSphere-client]]
+=== Install the vSphere Client 
+
+To remotely access the newly installed ESXi host, you are going to install
+vSphere Client on your workstation.
+
+image:images/vsphere.PNG["Missing vSphere client figure", float="right"]
+
+- Go the shared repository
+- Select vSphere client
+- Run the installer 
+- Start the client
+- Log in to the CiB host
+- Register the host with the license key  5N2CQ-02H4L-08C49-0K1RP-A13J1
+
+
+Congratulations! You are now ready to start the CIB configuration.
+
+
+
+
+== Virtual machine installation
+
+In this step, you are going to create virtual machines running Linux
+Ubuntu or Microsoft 7 Professional operating systems.
+
+The process can take between 2 to 4 hours depending of the experience and familiarity with 
+the tools. It is at this stage a manual process involving a combination of GUI mouse clicks and CLI 
+keystrokes. 
+
+To complete this task, you should have some experience in 
+installing Windows 7, Ubuntu, databases and other applications.
+
+
+=== Prepare for the virtual machine installation
+
+- Create a datastore 
+- Create a folder 
+- Transfer the Linux 12.04 LTS 64-bit ISO images from the repository to the datastore
+- Transfer the Windows 7 Professional 64-bit ISO images from the repository to the datastore
+
+
+[[Create-vm]]
+=== Create a virtual machine 
+
+- Open your vSphere Client
+- Go to *File -> New -> Virtual Machine*
+
+
+The new virtual machine wizard opens
+
+image:images/create-new-virtual-machine.PNG[Create a virtual machine wizard]
+
+- Select *Custom* to create a virtual machine with additional devices or specific configuration options.
+
+image:images/custom-install.PNG[Choose the custom install]
+
+- Name your virtual machine 
+
+// image:images/vm-name.PNG[Missing figure here: Name your virtual machine]
+
+- Select the datastore1 
+
+image:images/datastore1.PNG[Datastore1]
+
+
+- Select the virtual machine version: 8
+
+image:images/virtual-machine-version.PNG[Datastore1]
+
+- Select the  guest operating system
+
+
+* For Windows 
+
+image:images/windows7-64-bit-as-guest-operating-systems.PNG[Datastore1]
+
+
+
+* For Linux
+
+image:images/Ubuntu-as-guest-operating-systems.PNG[Datastore1]
+
+- Choose the number of cores
+
+image:images/virtual-cores.PNG[Datastore1]
+
+- Choose the memory 
+
+image:images/memory.PNG[Datastore1]
+
+- Choose the number of network connections 
+
+image:images/network-connections.PNG[Datastore1]
+
+- Choose the SCSI controller
+
+image:images/scsi-controller.PNG[Datastore1]
+
+- Create a new virtual disk
+
+image:images/disk.PNG[Datastore1]
+
+image:images/disk-capacity-provisioning-location.PNG[Datastore1]
+
+Advanced option for the virtual disk
+
+image:images/disk-advanced-options.PNG[Datastore1]
+
+- Edit the virtual machine settings before completion
+
+// image:images/vm-settings-before-completion.PNG[VM settings before commpletion figure]
+
+You can see the virtual machine properties
+
+
+
+On the hardware tabsheet, 
+
+- Select new CD/DVD,  
+- Check the 'connect at power on'
+- Select 'Datastore ISO File'
+
+
+image:images/virtual-machine-properties.png["virtual machine properties"]
+
+At this point, the new VM has been created. You still need to install the
+Operating System. The next two steps shows how to install Windows 7 or Linux
+Ubuntu 12.04 on the newly created virtual machine.
+
+[[Install-windows]]
+=== Install Windows 7 as a guest operating system 
+
+- Open vSphere client 
+- Select the newly created virtual machine
+
+
+
+During the installation of Windows 7 machines, 
+
+- Select English as your language.
+- Install Windows in the  Disk 0 unallocated space.
+- Select time and currency format : English (United States).
+- Select keyboard or input method: US.
+- Accept the license terms.
+- Type a user name : see login naming conventions .
+- Type a computer name : see computer naming conventions.
+- Type a password.
+- Retype a password.
+- Type a password hint.
+
+- Install important updates only
+- Select your time and date settings: Time zone, 
+** Unselect *Automatically adjust clock for day light saving time*
+
+- Select *Work network*
+
+ 
+
+==== Post-installations
+
+** Join the  domain if you are part of a domain
+** Setup private IP addresses
+** Activate the Windows license
+
+
+==== Miscellaneous
+
+- Install Acrobat reader 
+
+[[Install-ubuntu]]
+=== Install Linux Ubuntu as a guest operating system
+
+In this step, you are going to install Linux operating system on the virtual
+machine. 
+
+
+.For experienced system administrators
+*****
+During the installation of Ubuntu servers, choose 
+
+* 64-bit edition  
+* Guided disk with LVM
+* OpenSSH server
+* Install the GRUB boot loader to the master boot record
+* Use *apt* package management to install applications
+*****
+
+
+- Select English as the default language
+
+image:images/ubuntu-language.PNG[figure-missing]
+
+- Choose to install Ubuntu server
+
+image:images/ubuntu-Install-server.PNG
+
+- Choose *English* as the default language
+
+image:images/ubuntu-default-language.PNG[figure-missing]
+
+- Select your location based on the language you select.
+Choose other If your location is not listed.
+
+image:images/ubuntu-location.PNG[figure-missing]
+
+- Select *Detect keyboard layout* to configure the keyboard
+
+image:images/ubuntu-detect-keyboard-layout.PNG[Missing figure]
+
+Follow the prompt until your keyboard is detected by the installer.
+
+image:images/ubuntu-keyboard-detected.PNG[Missing figure]
+
+Enter the hostname 
+
+
+image:images/ubuntu-hostname.PNG[Missing figure]
+
+
+Enter your full name 
+
+image:images/ubuntu-fullname.PNG[Missing figure]
+
+Enter your user name ( see naming conventions in appendix)
+
+image:images/ubuntu-username.PNG[Missing figure]
+
+
+Choose a good password ( see naming conventions in appendix)
+
+image:images/ubuntu-password.PNG[Missing figure]
+
+image:images/ubuntu-password-confirmation.PNG[Missing figure]
+
+
+Do not encrypt your home directory 
+
+image:images/ubuntu-no-encryption.PNG[Missing figure]
+
+Select *Guided disk with LVM* as your partitioning method
+
+image:images/ubuntu-partition.PNG[Missing figure]
+
+select disk to partition
+
+image:images/ubuntu-partition-disk.PNG[Missing figure]
+
+To write the changes to disks and configure LVM, select *Yes*
+
+image:images/ubuntu-partition-confirmation.PNG[Missing figure]
+
+
+Use the whole volume group for guided partitioning
+
+// image:images/ubuntu-partition-whole-volume.PNG[Missing figure]
+
+
+image:images/ubuntu-partition-whole-volume-confirmation.PNG[Missing figure]
+
+Enter the proxy information if needed otherwise, leave this blank.
+
+image:images/ubuntu-proxy.PNG[Missing figure]
+
+No automatic updates 
+
+image:images/ubuntu-manual-updates.PNG[Missing figure]
+
+
+Select OpenSSH
+
+// image:images/ubuntu-openSSH.PNG[Missing figure to select OpenSSH]
+
+
+Install GRUB boot loader on the hard disk
+
+image:images/ubuntu-grub.PNG[Missing figure]
+
+Installation is complete
+
+image:images/ubuntu-installation-complete.PNG[Missing figure]
+
+The system is rebooting and display the prompt below when ready.
+Enter the username and password 
+
+
+image:images/ubuntu-first-login.PNG[Missing figure]
+
+image:images/ubuntu-after-first-login.PNG[Missing figure]
+
+
+==== Setup static IP address 
+
+To set a static IP address in Ubuntu, 
+you are going to edit */etc/network/interfaces* file.
+
+Initially, the file only contains information about the local loopback
+address:
+
+----
+auto lo
+iface lo inet loopback
+----
+
+To assign a static IP address, you will need to make some changes to this
+file.
+
+Let us say you want to assign a static IP of {archive-ip-address} to your _eth0_
+network connection with a subnet mask of 255.255.255.0 and a local gateway of
+172.18.20.1. 
+
+First, make a backup copy of the interfaces file in your home directory in
+case something goes amiss during the editing process.
+
+----
+sudo cp /etc/network/interfaces ~
+----
+
+Add the following lines in */etc/network/interfaces*
+
+-----
+iface eth0 inet static
+address 172.18.20.191
+netmask 255.255.254.0
+gateway 172.18.20.1
+-----
+
+After saving the updated file to disk,
+use the command below to force Ubuntu to re-read the configuration files:
+
+----
+sudo ifup eth0
+----
+
+To test if the change is successfully, ping the host 
+
+----
+ping 172.18.20.191
+----
+
+Congratulations! You have successfully installed Ubuntu on your VM
+
+
+//todo: section with utils: unzip 
+
+
+
+=== Install VMware Tools
+
+In this step, you are going to install VMware Tools to enhance graphics and mouse performance in the newly installed virtual machine.
+
+
+- Open vSphere Client
+- Select the virtual machine
+- Open the console
+- Go to *VM > Guest > Install/Upgrade VMware Tools*
+
+
+image:images/vmware-tools-warning.PNG[Missing figure]
+
+image:images/vmware-tools-installing.PNG[Missing figure]
+
+image:images/vmware-tools-running.PNG[Missing figure]
+
+image:images/vmware-tools-setup-type.PNG[Missing figure]
+
+image:images/vmware-tools-welcome-to-wizard.PNG[Missing figure]
+
+
+
+- Run setup64.exe 
+
+- Welcome wizard
+- Choose *Complete* as the Setup type
+- Restart the virtual machine for the configuration changes to take effect.
+
+
+
+
+At this point, you should know 
+how to create a virtual machine
+how to install Windows 7 or Ubuntu 12.04 
+How to install VMware tools to improve GUI performance
+
+In the next steps, you are going to install the application servers on the
+virtual machines.
+
+
+
+== Archive Server installation 
+
+=== Role
+
+The main role of the archive server is to provide a shared file storage to
+Windows and Linux clients. It is essentially a file server running the SAMBA
+package on a Linux based machine. It is also setup as a FTP /GIT server to
+facilitate file sharing  with iSHARE2 technical support.
+
+The secondary role is to provide authentication services for Linux clients
+in a Active Directory environment.
+
+
+=== Setup the Virtual machine
+
+Using the instructions in <<Create-vm>> and <<Install-ubuntu>>, setup a new VM with the following
+specifications:
+
+- OS : Ubuntu Server 12.04 LTS 64-bit
+- CPU : 1 core
+- RAM : 2 GB
+- Storage : 100 GB
+- IP Address: 172.18.20.191
+- Host Name: archive.cib.<code site>
+
+
+=== Samba installation  
+
+==== Install the Samba package
+
+In this step, we are going to install the Samba packages.
+
+----
+sudo apt-get install libcups2 samba samba-common 
+----
+
+==== Allow only authenticated users 
+
+Edit the */etc/samba/smb.conf* 
+
+In the global section, remove the '#' at the beginning of the line +security =
+user+ so that it looks like this:
+
+
+-----
+# "security = user" is always a good idea. This will require a Unix account
+# in this server for every user accessing the server. See
+# /usr/share/doc/samba-doc/htmldocs/Samba3-HOWTO/ServerType.html
+# in the samba-doc package for details.
+   security = user
+-----
+
+This enables Linux users to log in to the Samba server.
+Close the file and restart Samba.
+
+----
+sudo service smbd restart
+----
+
+==== Create the shared directory for all authenticated users
+
+Create the directory for sharing the files and change the group to the _users_
+group:
+
+-----
+sudo mkdir  /home/public/
+sudo chown -R root:users /home/public/
+sudo chmod -R ug+rwx,o+rx-w /home/public/
+-----
+
+At the end of the */etc/samba/smb.conf* file add the following lines:
+
+----
+[public]
+  comment = public folder accessible by authenticated users
+  path = /home/public
+  valid users = @users
+  force group = users
+  create mask = 0660
+  directory mask = 0771
+  writable = yes
+----
+
+==== Create a private directory for home
+
+//todo: change this bit
+if you want all users to be able to read and write to their home directories
+via Samba, add the following lines to the */etc/samba/smb.conf* file:
+
+----
+[homes]
+  comment = Home directories
+  browseable = no
+  valid users = %S
+  writable = yes
+  create mask = 0700
+  directory mask = 0700
+----
+
+Now restart Samba
+
+----
+sudo service smbd restart
+----
+
+==== Add and manage users
+
+In this example, you will add a user named *mandela*. 
+You can add as many users as you need in the same way,
+just replace username *mandela* with the desired username in the commands.
+
+----
+sudo passwd mandela
+----
+
+-> Enter the password for the new user.
+
+Now add the user to the Samba user database:
+
+-----
+sudo smbpasswd -a mandela
+-----
+
+-> Enter the password of the new user.
+
+==== Access the shares from Windows client
+
+Now you should be able to log in from your Windows workstation with the file
+explorer (address is \\172.18.20.191) using the username _mandela_ and the
+chosen password  
+
+==== Access the shares from linux clients
+
+//todo: add GUI procedure for Nautilus
+
+Create a mount point 
+
+-----
+sudo mkdir -p /mnt/cib/archive
+-----
+
+Mount the share using the cifs protocol (instead of the deprecated smbfs ) 
+
+----
+sudo mount -t cifs //172.18.20.191/public/ /mnt/cib/archive -o user=ckyony 
+----
+
+//todo: add procedure for frequent 
+If you intend to access your share frequently, 
+edit */etc/fstab* file and 
+add a line that looks like this:
+
+----
+//172.18.20.191/public /mnt/cib/public cifs noauto,credentials=/home/ckyony/.cib-credentials 0 0
+----
+
+Create a *~/.cib-credentials/* file in your home directory to store your credentials
+
+----
+user=ckyony
+password=mysecret
+----
+
+Protect the file so only you can access the credentials file
+
+-----
+chmod 600 ~/.cib-credentials
+-----
+
+To access the share, mount it with the simple command
+
+------
+sudo mount /mnt/cib/public
+------
+
+=== Git installation 
+
+It is important to keep configuration under strict version control.
+*Git* is a distributed revision control system with a command set that provides both high-level operations and full access to internals.
+
+==== Installation 
+
+
+==== Configuration 
+
+
+
+
+
+== Nada server installation
+
+=== Role
+
+The main role of this server is to host the NADA data repository.
+
+=== Setup the virtual machine
+
+Using the instructions in <<Create-vm>> and <<Install-ubuntu>>, setup a new VM with the following
+specifications:
+
+- OS         : Ubuntu Server 12.04 LTS
+- CPU        : 1
+- RAM        : 2
+- Storage    : 40 GB
+- IP Address : {nada-ip-address}
+- Host Name  : Nada.cib.<code site>
+
+In the next steps, you are going to install the software required by NADA:
+Apache 2+2+ , PHP 5.2+ and MySql 5.0+
+
+=== Install the Apache web server 
+
+Open a terminal and type the following command:
+
+----
+sudo apt-get install apache2
+----
+
+To test if Apache is installed, 
+open your  browser with the Nada IP address e.g. {nada-ip-address}. 
+You should see the message below:
+
+image:images/apache-installation.PNG[Missing figure for Apache ]
+
+
+=== Install PHP and required extensions
+
+Open a terminal 
+
+----
+sudo apt-get install php5 
+----
+
+To test if PHP  is correctly installed, create a text file called
+*/var/www/info.php*.
+
+Enter the following text into the file 
+
+------
+<?php echo phpinfo(); ?>
+-----
+
+
+After saving the file, browse to http://localhost/info.php from the local
+machine. If you are accessing the server from another machine, enter the IP
+address of the server followed by /info.php (e.g. http://{nada-ip-server}/info.php )
+
+If PHP is correctly installed, you will see a screen like this:
+
+image:images/php-info.PNG[Missing image ]
+
+The NADA application requires the following PHP extensions: 
+xml, 
+xsl,
+mysql,
+sqlite,
+simplexml,
+zip,
+mbstring,
+openssl
+
+Install them with the command line shown below
+
+-----
+sudo apt-get install libapache2-mod-php5 php5-mysql php5-xsl
+----
+
+Restart the Apache server
+
+-----
+sudo service apache2 restart
+----
+
+Increase the *upload_max_filesize* and *post_max_size*   settings in the */etc/php5/apache2/php.ini*
+configuration file. 
+
+------
+post_max_size = 20M
+upload_max_filesize = 16M
+-----
+
+- Set your time zone in the */etc/php5/config/apache2/conf
+
+----
+date.timezone = 'Africa/Pretoria'
+----
+
+
+=== Install MySQL database server
+
+Open a terminal, type the command line shown below:
+
+-----
+sudo apt-get install mysql-server
+-----
+
+IMPORTANT: Make a note of the password you set during the mysql installation.
+
+
+Create a database for the NADA installation
+
+------
+sudo mysql -u root -p
+-----
+
+- Enter the root password you set when you installed the LAMP server
+
+- Create a database called *nada* 
+
+[source,sql]
+-----
+mysql> create database nada4_ddp;
+----
+
+- Create a MySQL user called nada who has permission to access the nada database
+created above.
+
+[source,sql]
+----
+mysql> grant select, insert, update, delete, create, drop, index, alter, create temporary tables,
+lock tables on nada.*  to 'nada'@'localhost' identified by 'yourpassword';
+----
+
+'yourpassword' can be anything you choose. nada is the name of the database
+the user gets access to. localhost is the location which gets access to your
+database. Note as before remember this password you will need it later! 
+
+- Exit the MySql shell
+
+[source,sql]
+-----
+mysql> exit
+-----
+
+
+=== Install the NADA application files
+
+Make a directory for the nada software in the */var/www* folder and copy 
+the {nada-zip} file from the archive server at {archive-ip-address}
+
+----
+cd /var/www/
+sudo wget http://{archive-ip-address}/public/nada/nada-4.0.zip
+-----
+
+- Unzip the file:
+
+-----
+sudo unzip nada-4.0.zip
+----
+
+- Change the permissions to the following folders:
+
+  *  *{nada-install-dir}datafiles*: stores the DDI's documentation and data.
+  * *{nada-install-dir}cache*: stores cached web pages.
+  * *{nada-install-dir}logs*: stores log files.
+  
+----
+sudo chmod -R a+rwx {nada-install-dir}datafiles
+sudo chmod -R a+rwx {nada-install-dir}application/cache
+sudo chmod -R a+rwx {nada-install-dir}application/logs
+----
+
+
+=== Configure the NADA database connection settings
+
+To enter the correct database connection settings,
+edit the *{nada-install-dir}application/config/database.php*
+
+Go to line number 45 to 48 
+
+----------------------
+$db['default']['hostname'] ="localhost";
+$db['default']['username'] ="nada"
+$db['default']['password'] ="T3amw0rk"
+$db['default']['database'] ="nada4_ddp"
+-----------------------
+
+
+=== Run the web installer
+
+You are now all set to run the Web installer and get your site up.
+To run the installer, open a web browser and navigate to the location for your
+new website. (e.g *http://{nada-ip-address}/nada/index.php/install*)
+
+
+The following screen should be displayed:
+
+image:images/nada-installer.PNG[Nada Installer]
+
+[[Nada-checklist]]
+*************
+The installer checks a number of settings on the server and provides a summary like the above.
+
+- It provides information on the version of PHP running on your server (NADA
+requires PHP 5.2+ to be installed) If you do not have the correct version
+to meet the minimum requirements for the NADA, either upgrade your PHP
+version to the required version or request your hosting company ( ISP) to
+install PHP 5.2 or later for your account.  
+
+- Check that the MySQL you are
+using is at least version 5.0, and, if not, install a newer version or
+request your hosting company to install a newer version for you. The
+checklist also shows if you have successfully connected to the database or
+not. If you have not, then go back to the instructions on the database
+connection settings and correct the problem.  
+
+- Check that there are green
+ticks next to all the required PHP extensions listed. If there is a red
+cross next to any of them then you will need to go back and install and
+configure the missing PHP extensions on your server (or request that your
+ISP enables the missing extensions for you). If you do not know how to do
+this then Windows users go here. For Linux users consult the User Guides
+on how to install PHP extensions for your distribution.  
+
+- Review the
+section on php.ini settings. These settings determine how big a file your
+PHP settings will allow to be uploaded to the server. The recommended
+value is given as a guideline for you. To change the settings edit your
+php.ini file as described in the PHP installation guide for your operating
+system\distribution. This process usually involves locating your php.ini
+file on your server, opening it with a text editor, looking for the
+variables file (uploads, post_max_size and upload_max_filesize) and
+changing the values to the recommended values ( up to the maximum size of
+the files you will upload). The next steps are saving the file and,
+lastly, restarting your web server.  
+
+- The last section deals with file
+permissions for folders which are required to have READ/WRITE/DELETE
+permissions set for them. If any of these folders have red crosses next to
+them then go back and 1) check that the folder exists on the server –if
+not create it in the location shown in the grey text next to each item. 2)
+change the permissions to read/write/delete. 
+****************
+
+- Once all the settings above have been completed as per <<Nada-checklist>>,
+click on the *Install Database* button at the bottom left of the screen.
+
+
+- Create the administrator account
+
+image:images/nada-create-administrator-account.PNG
+
+- Click the *Create account* button.
+
+// Check why the web installer is not working with the version 4
+
+image:images/nada-complete.PNG[ ... Missing figure of Nada successful
+installation]
+
+=== Launch Nada
+
+Open browser and type the URL to launch the NADA.
+
+image:images/nada-launch.PNG[Nada launch]
+
+
+
+== Database server installation
+
+=== Role
+
+The main role of this server is to host the member site database.
+
+There are a variety of options: MS SQL Server, Access, FoxPro, MySQL, Oracle,
+dBase. In this manual, I will provide two examples:
+
+- MS SQL Express 2008 R2 with Tools  on Windows 7
+- MySql 5.5  on Ubuntu 12.04 
+
+
+=== Install MS SQL Express 2008 on Windows 7
+
+==== Setup the  VM
+
+Following the instructions in <<Create-vm>> and <<Install-windows>> , setup a new virtual machine
+with the following specifications:
+
+- OS         : Windows 7 Pro 64-bit
+- CPU        : 2-core
+- RAM        : 4 GB
+- Storage        : 40 GB
+- IP Address : {db-ip-address}
+- Host Name  : db.cib.<code site>
+
+==== Install MS SQL 2008 R2 Express edition with tools
+
+In this step, you are going to install Microsoft SQL 2008 R2 Express edition
+with Advanced Tools.
+
+
+//todo: how to access the software repository
+
+- Use the File Explorer 
+- Go to Samba -> Software library -> SQL
+- Run *SQLEXPRWT_x64_ENU_R2.exe*
+
+- Allow the setup program to make changes to your computer
+
+image:images/mssql-user-account-control.PNG[Missing picture]
+
+- Choose new installation 
+
+image:images/mssql-new-installation.PNG[Missing picture SQL Express installation ]
+
+- Accept the license terms
+
+image:images/mssql-license.PNG[Missing picture SQL Express installation ]
+
+- Select 'All' features in the default shared feature directory
+
+image:images/mssql-feature-selection.PNG[Missing picture SQL Express installation ]
+
+- Install MS SQL server as the default instance 
+
+image:images/mssql-default-instance.PNG[Missing picture SQL Express installation ]
+
+Use separate account for each SQL server service. 
+Change the startup type to 'automatic'
+
+image:images/mssql-service-account.PNG[Missing picture SQL Express installation ]
+
+Choose 'Mixed mode (SQL server authentication and Windows authentication)'.
+Specify the password for SQL Server system administrator.
+Add yourself as SQL server administrator.
+
+image:images/mssql-database-engine-configuration.PNG[Missing picture SQL Express installation ]
+gg
+Do not send Windows and SQL server Error Reports to Microsoft
+
+image:images/mssql-no-error-reporting.PNG[Missing picture SQL Express installation ]
+
+Click 'Close' when the installation 
+
+image:images/mssql-complete.PNG[Missing picture SQL Express installation ]
+
+
+To test that SQL server has been correctly installed, 
+open Microsoft SQL server management studio for the first time
+
+- Go to Start -> All Applications -> Microsoft SQL Server 2008 R2 -> SQL
+  server Management Studio
+
+image:images/mssql-management-studio.PNG[Missing picture SQL Express installation ]
+
+Enter your username and password if you are using the mixed authentication
+mode.
+
+Click *Connect*.
+
+//To test that the database can be accessed remotely
+
+==== Setup remote access
+
+In this step, you are going to setup MS SQL 2008 to accept remote connections
+
+
+
+==== Install the analytical database 
+
+In this step, you are going to install your *analytical* database from a
+backup of the operational database. 
+
+Here goes the definition of the analytical database versus operational
+database.
+
+
+- Open Microsoft SQL Server Management Studio
+- In the object Explorer, select *Database*.
+- Right-click 
+- Choose *Restore database ...*
+
+image:images/mssql-restore-database-menu.PNG[Missing picture SQL Express installation ]
+
+- Type the name of the new analytical database 
+- Choose *From device* as the source of the backup set
+- Browse to the folder 
+- Select the backup sets to restore. Don't forget to check the box in the
+  *Restore* column 
+
+//image:images/mssql-restore-database.PNG[Missing picture SQL Express installation ]
+
+After  , you should see the screen shot below
+
+image:images/mssql-restore-analytical-database.PNG[Missing picture SQL Express installation ]
+
+
+You see the new analytical database in Microsoft SQL Server Management Studio
+
+
+=== MySql on Ubuntu 12.08
+
+In this step, you are going to setup a mysql database on Ubuntu server
+
+==== Setup the virtual machine
+
+Using the instructions in <<Create-vm>> and <<Install-ubuntu>>, setup a new VM with the following
+specifications:
+
+- OS         : Ubuntu 12.04 LTS
+- CPU        : 2-core
+- RAM        : 4 GB
+- IP Address : 172.18.21.229
+- Host Name  : database.cib.<code site>
+
+
+==== Install  mysql
+
+To install MySql 5.5 
+
+----
+sudo apt-get install mysql-server
+----
+
+During the installation process you will be prompted to enter a password for the MySQL root user.
+
+Once the installation is complete, the MySQL server should be started
+automatically. 
+
+You can run the following command from a terminal prompt to check whether the
+MySQL server is running:
+
+----
+sudo netstat -tap | grep mysql
+----
+
+When you run this command, you should see the following line or something similar:
+
+----
+tcp        0      0 localhost:mysql         *:*                LISTEN      2556/mysqld
+----
+
+If the server is not running correctly, you can type the following command to start it:
+
+----
+sudo service mysql restart
+----
+
+==== Configure
+
+You can edit the */etc/mysql/my.cnf* file to configure the basic settings -- log
+file, port number, etc. For example, to configure MySQL to listen for
+connections from network hosts, change the bind-address directive to the
+server's IP address:
+
+----
+bind-address            = 192.168.0.5
+----
+
+Replace 192.168.0.5 with the appropriate address.
+
+After making a change to /etc/mysql/my.cnf, restart the MySQL daemon 
+
+----
+sudo service mysql restart
+----
+
+If you would like to change the MySQL root password, in a terminal enter:
+
+----
+sudo dpkg-reconfigure mysql-server-5.5
+----
+
+The MySQL daemon will be stopped, and you will be prompted to enter a new password. 
+
+==== Resources
+
+For more information on the configuration and administration of the MySQL
+database, consult the following resources: 
+
+1. Go to  http://www.mysql.com/[MySQL Home Page] 
+2. Consult the full documentation both online and offile format from the http://dev.mysql.com/doc/[MySQL Developers portal]
+
+
+
+== Data Manager desktop installation
+
+=== Role
+
+The primary role of this desktop is to host the tools needed by the Data
+Manager:
+
+- Pentaho Data Integration also called _Kettle_ for ETL
+- Nesstar Publisher for DDI documentation
+- Zotero for citation management
+
+
+=== Setup the virtual machine
+
+Using the instructions in <<Create-vm>> and <<Install-windows>>, setup a new VM with the following
+specifications:
+
+- OS : Windows 7 Professional
+- CPU : 2  
+- RAM : 4 GB
+- Storage : 30 GB
+- IP Address : {dm-ip-address}
+- Host Name: dm.cib.<code site>
+
+
+=== Pentaho Kettle  
+
+==== Install Java Runtime Environment
+
+*Kettle* requires the Oracle Java Runtime Environment version 1.6.
+
+WARNING: Kettle does not support Java 1.7.
+
+
+To start the installation, double-click on the *{jre}* executable.
+You should see the Welcome screen below
+
+image:images/jre-welcome.PNG[missing figure for Java]
+
+- Do not change the default installation folder.
+- Click *Install*.
+- Wait until you see the screen shot below
+
+image:images/jre-complete.PNG[missing figure for Java]
+
+- Click *Close* to complete the installation.
+
+
+==== Install Pentaho Kettle Community edition 
+
+In this step, you are going to install the Pentaho Kettle application, create
+your first repository , connect to the database server and create your first job and transformation
+
+- Create  *{pentaho-install-dir}* folder .
+
+- Download *{pdi-ce}.zip* from the Archive server into the
+  *{pentaho-install-dir}* folder.
+
+- Unzip the zip file in the *{pentaho-install-dir}*{pdi-ce}.zip*
+  folder.
+
+
+- To start the application, run the *Spoon.bat* batch file in the
+  *{pentaho-install-dir}data-integration* folder.
+
+
+[TIP]
+Create a shortcut on your desktop for the *Spoon client*. It will be easy
+to launch the application from there.
+
+- The first time you launch, you will be ask to create your first repository.
+
+image:images/pdi-repository-empty[Empty Pentaho repository]
+
+- To add a new repository, click on the green button on the top right of the screen.
+
+- Select *Kettle file repository* as per the dialog box below.
+
+image:images/pdi-repository-type[Pdi repository]
+
+
+- To enter the base directory, browse to *C:\\Pentaho*. Enter 'CIB' for the
+  *ID* and the *Name* of the repository.
+
+image:images/pdi-repository-settings[Pdi repository]
+
+
+- Click *OK* and you should see the Spoon environment.
+
+image:images/pdi-ide.PNG[Pentaho IDE]
+
+
+==== Install a native JDBC driver for MS SQL server
+
+If you are using a Microsoft SQL server 2012, 2008 R2, 2008, 2005 or Azure,
+you need to install a native JDBC driver in the correct directory.
+
+
+- Download the *{sqljdbc}* driver from the archive server
+  to the temporary folder *C:\\temp* .
+
+- Run *{sqljdbc}*.
+
+- When prompted for an installation directory , enter  *{Pentaho-install-dir}Microsoft Driver 4.0 for SQL server*.
+
+image:images/jdbc-unzip[JDBC unzip]
+
+You will see the following screen:
+
+image:images/jdbc-complete[JDBC complete]
+
+The next step is to copy the driver in the Pentaho installation directory.
+
+- Go to *{Pentaho-install-dir}Microsoft JDBC Driver 4.0 for SQL
+  Server\sqljdbc_4.0\enu*
+- Copy the *sqljdbc4.jar* file to the
+  *{pentaho-install-dir}\data-integration\libext\JDBC*
+
+[[Database-connection]]
+===== Setup a connection to the analytical database 
+
+The final step is to create a database connection to your analytical database.
+
+- Go to *File -> New -> Database Connection*.
+
+TIP: You may also click on the (New) icon below the *File* menu.
+
+- Enter the following information:
+  * Connection Name: express
+  * Host name: 
+  * Database name: 
+  * Instance Name: 
+  * Port Number: 
+  * User name: kettle 
+  * Password: T3amw0rk
+
+TIP: You must choose *SQL authentication* for the *JDBC(native)* driver on MS
+SQL Server.
+
+image:images/ktl-database-connection.PNG[Kettle database connection]
+
+- Click *Test* to make sure your entries are correct. A success message appears. 
+- Click *OK*, to exit the Database Connections dialog box.
+
+
+
+==== Build your first transformation 
+
+In this step, you are going to build your first transformation.
+Transformations are used to describe the data flows for ETL such as reading
+from a source, transforming data and loading into a target location.
+
+In this scenario, you are going to load a flat file (CSV) of sales data into a
+database so that mailing lists can be generated. Several of the customer
+records are missing postal codes that must be resolved before loading into the
+database.
+
+The logic looks like this:
+
+[graphviz]
+-----------------
+digraph transformation {
+  rankdir =LR
+  node [shape=box,color=darkorange]
+  read_sales_data [label= "Read Sales Data"]
+  zip_missing [label= "Zip missing?", shape=diamond]
+  lookup_zip_code [label = "Lookup Zip code"]
+  load_data [label = "Load Data"]
+
+  read_sales_data -> zip_missing
+  zip_missing -> lookup_zip_code [label = "yes"]
+  zip_missing -> load_data [label = "No"]
+  lookup_zip_code -> load_data
+------
+
+
+===== Retrieve data from a flat file
+
+Follow the instructions below to retrieve data from a flat file.
+
+- Click *New* in the upper left corner of the Spoon graphical interface.
+- Select *Transformation* from the list
+- Under the *Design* tab, expand the *Input* node; then, select and drag a
+  *Text File Input* step onto the canvas on the right.
+
+image:images/ktl-text-file-input.PNG[Kettle text file input]
+
+- Double-click on the *Text File input* step.
+
+The edit properties dialog box associated with the Text File input step
+appears. In this dialog box, you specify the properties related to a
+particular step.
+
+image:images/ktl-text-file-input-properties.PNG[Kettle text file input]
+
+- In the *Step Name* field, type *Read Sales Data*.
+
+- Click *Browse* to locate the source file, *sales_data.csv*, available at *...\design-tools\data-integration
+\samples\transformations\files*.
+
+The path to the source file appears in the File or directory field.
+
+Click *Add.*
+
+The path to the file appears under *Selected Files*. You can look at the
+contents of the file by clicking the *Show file* content to determine things
+such as how the input file is delimited, what enclosure character is used, and
+whether or not a header row is present. 
+
+In the example, the input file is
+comma (,) delimited, the enclosure character being a quotation mark (“) and it
+contains a single header row containing field names.  
+
+- Click the *Content* tab.  The fields under the *Content* tab allow you to define how your data is
+formatted.
+
+- Make sure that the *Separator* is set to comma (,) and that the
+*Enclosure* is set to quotation mark ("). Enable *Header* because there is one
+line of header rows in the file.
+
+
+image:images/ktl-text-file-input-content.PNG[Kettle text file input]
+
+- Click the *Fields* tab and click *Get Fields* to retrieve the input fields from your source file.
+
+
+image:images/ktl-text-file-input-fields.PNG[Kettle text file input]
+
+
+A dialog box appears requesting that you to specify the number of lines to scan, allowing you to determine default
+settings for the fields such as their format, length, and precision. Type *0* (zero) in the *Number of Sample Lines* text
+box to scan all lines. By scanning all lines, you ensure that Pentaho Data Integration has read the entire contents
+of the file and you reduce the possibility of errors that may cause a transformation not to run. Click **OK** and the
+summary of the scan results appears. Once you are done examining the scan results,click Close to return to the
+step properties editor.
+
+- Click *Preview Rows* to verify that your file is being read correctly. You
+can change the number of rows to preview. Click *OK* to exit the step
+properties dialog box. 
+
+
+image:images/ktl-text-file-input-preview.PNG[Kettle text file input]
+image:images/ktl-text-file-input-preview-rows.PNG[Kettle text file input]
+
+- Save your transformation as shown in <<Save-transformation>>.
+
+[[Save-transformation]]
+===== Save your transformation 
+
+Follow the instructions below to save your transformation.
+
+- In the Spoon designer, click *File -> Save As*.
+
+The Transformation Properties dialog box appears.
+
+- In the *Transformation Name* field, type *Getting Started Transformation*.
+
+image:images/ktl-save-transformation.PNG[save transformation]
+
+
+- In the *Directory* field, click the folder icon to select a repository folder where you will save your transformation.
+
+- Expand the Home directory and double-click the joe folder.
+
+Your transformation will be stored in the *tutorial* folder in the CIB Repository.
+
+-  Click *OK* to exit the *Transformation Properties* dialog box.
+
+The *Enter Comment* dialog box appears.
+
+-  Click in the *Enter Comment* dialog box and press *Delete* to remove the default text string. Type a meaningful
+comment about your transformation.
+
+The comment and your transformation are tracked for version control purposes in the Repository.
+
+-  Click *OK* to exit the Enter Comment dialog box.
+
+===== Filter records with missing postal codes
+
+The source file contains several records that are missing postal codes. You will now use the Filter Rows transformation
+step to separate out those records so that you can resolve them in a later
+step.
+
+-  Add a *Filter Rows* step to your transformation. Under the *Design* tab, go
+   to *Flow -> Filter Rows*.
+
+-  Create a "hop" between the *Read Sales Data* (Text File Input) step and the
+   *Filter Rows* step. Hops are used to describe the flow of data in your
+   transformation. To create the hop, click the *Read Sales Data* (Text File
+   input) step, then press the <SHIFT> key down and draw a line to the Filter
+   Rows step.  
+   
+
+image:images/ktl-hop.PNG[hop]
+
+-  Double-click the *Filter Rows* step.
+
+The Filter Rows edit properties dialog box appears.
+
+-  In the *Step Name* field type, *Filter Missing Zips*.
+
+-  Under *The condition*, click <field>. A dialog box that contains the fields you can use to create your condition
+appears.
+
+
+image:images/ktl-filter-conditions.PNG[Filter conditions]
+
+
+- In the *Fields*: dialog box select *POSTALCODE* and click *OK*.
+
+- Click on the comparison operator (set to = by default) and select the *IS NOT NULL* function and click OK. Click OK
+to exit the Filter Rows properties dialog box.
+
+- Save your transformation as per instructions in <<Save-transformation>>.
+
+
+===== Loading your data into a relational database
+
+In this step, you will take all records exiting the Filter rows step where the
+POSTAL CODE was not null (the *true* condition) and load them into a database
+table.
+
+
+-  Under the Design tab, expand the contents of the *Output* node.
+
+-  Click and drag a *Table Output* step into your transformation; create a hop between the *Filter Missing Zips* (Filter
+Rows) and *Table Output* steps. Select *Result is TRUE*.
+
+
+image:images/ktl-result-is-true.PNG[Figure: Result is true]
+
+
+-  Double-click the *Table Output* step to open its edit properties dialog box.
+
+
+image:images/ktl-table-output.PNG[Figure: Result is true]
+
+-  Rename your Table Output Step to *Write to Database*.
+
+
+- In the *Connection*, select the connection configured in
+  <<Database-connection>> .
+
+
+-  Type *SALES_DATA* in the *Target Table* text field.
+
+This table does not exist in the target database. In the next steps you will generate the Data Definition Language
+(DDL) to create the table and execute it. DDL are the SQL commands that define the different structures in a
+database such as CREATE TABLE.
+
+- In the *Write to Database* edit properties dialog box, enable the *Truncate Table* property.
+
+- Click *SQL* to generate the DDL for creating your target table.
+
+- Click *Execute* to run the SQL.
+
+A results dialog box appears indicating that one SQL statement was executed. Click *OK* close the execution dialog
+box. Click *Close* to close the Simple SQL editor dialog box. Click *OK* to close the Table Output edit properties dialog
+box.
+
+- Save your transformation.
+
+
+===== Retrieve data from the Lookup file
+
+
+You have been provided a second text file containing a list of cities, states,
+and postal codes that you will now use to look up the postal codes for all of
+the records where they were missing (the ‘false’ branch of your Filter rows
+step).  First, you will use a Text file input step to read from the source
+file, next you will use a Stream lookup step to bring the resolved Postal
+Codes into the stream.
+
+-  Add a new *Text File Input* step to your transformation. In this step you will retrieve the records from your lookup file.
+
+-  Rename your *Text File input* step to, *Read Postal Codes*.
+
+-  Click *Browse* to locate the source file, *Zipssortedbycitystate.csv*,
+   located at
+   *...\design-tools\data-integration\samples\transformations\files.*
+
+-  Click *Add*.
+
+The path to the file appears under *Selected Files*.
+
+-  Under the *Content* tab, enable the *Header* option. Change the separator character to a comma (,). and confirm that
+the enclosure setting is correct.
+
+-  Under the *Fields* tab, click *Get Fields* to retrieve the data from your .csv file.
+
+-  Click *Preview Rows* to make sure your entries are correct and click *OK* to exit the Text File input properties dialog
+box.
+
+
+- Save your transformation.
+
+===== Resolving missing Zip Code information 
+
+In this exercise, you will begin to resolve the missing zip codes.
+
+-  Add a *Stream Lookup* step to your transformation. Under the Design tab, expand the *Lookup* folder and choose
+*Stream Lookup*.
+
+-  Draw a hop between the *Filter Missing Zips* (Filter rows) and *Stream
+   Lookup* steps. Select the *Result is FALSE*.
+
+-  Create a hop from the *Read Postal Codes* step (Text File input) to the Stream lookup step.
+
+-  Double-click on the *Stream lookup* step to open its edit properties dialog box.
+
+-  Rename *Stream Lookup* to *Lookup Missing Zips*.
+
+image:images/ktl-rename-stream-lookup.PNG[hop]
+
+-  Select the *Read Postal Codes* (Text File input) as the Lookup step.
+
+image:images/ktl-city-state.PNG[Kettle]
+
+-  Define the *CITY* and *STATE* fields in the keys to look up the values
+   table. Click the drop down in the *Field* column and select *CITY*. Then, click
+   in the *LookupField* column and select *CITY*. Perform the same actions to
+   define the second key based on the *STATE* fields coming in on the source and
+   lookup streams:
+
+-  Click *Get Lookup Fields*. *POSTALCODE* is the only field you want to retrieve. (To delete the extra CITY and
+STATE lines, right-click in the line and select *Delete Selected Line*.) Give *POSTALCODE* a new name of
+*ZIP_RESOLVED* and make sure the *Type* is set to *String*. Click *OK* to close the *Stream Lookup edit* properties
+dialog box.
+
+
+image:images/ktl-get-lookup-fields.PNG[Kettle]
+
+
+-  Save your transformation.
+
+You can now select the Lookup Missing Zips step (Stream lookup ) in the graphical workspace. Right-click and
+select *Preview* to display the preview/debugger dialog box. Click *Quick Launch* to preview the data flowing through
+this step. Notice that the new field, ZIP_RESOLVED, has been added to the stream containing your resolved postal
+codes.
+
+===== Completing your Transformation
+
+The last task is to clean up the field layout on your lookup stream so that it matches the format and layout of your other
+stream going to the Write to Database (Table output) step. You will create a *Select values* step. This is a very useful
+step for renaming fields on the stream, removing unnecessary fields, and more.
+
+- Add a *Select Values* step to your transformation. Expand the *Transform* folder and choose *Select Values*.
+- Create a hop between the *Lookup Missing Zips* and *Select Values* steps.
+- Double-click the *Select Values* step to open its properties dialog box.
+- Rename the *Select Values* step to, *Prepare Field Layout*.
+- Click *Get fields* to select to retrieve all fields and begin modifying the stream layout.
+
+-  Select the *ZIP_RESOLVED* field in the Fields list and use <CTRL><UP>
+   to move it just below the *POSTALCODE* (The one that still contains null
+   values).
+
+- Select the old *POSTALCODE* field in the list (line 20) and delete it.
+
+image:images/ktl-old-postal-code.PNG[ktl]
+
+- The original *POSTALCODE* field was formatted as an 9-character string. You must modify your new field to match
+the form. Click the *Meta-Data* tab.
+
+-  In the first row of the *Fields to alter table*, click in the *Fieldname* column and select *ZIP_RESOLVED*.
+
+- Type *POSTALCODE* in the *Rename* to column; select *String* in the Type column, and type *9* in the *Length* column.
+Click *OK* to exit the edit properties dialog box.
+
+- Draw a hop from the *Prepare Field Layout* (Select values) step to the
+  *Write to Database* (Table output) step.
+
+image:images/ktl-transformation-complete[Kettle missing text file input]
+
+- Save your transformation.
+
+===== Run Your Transformation
+
+In the Spoon graphical interface, click (Run this Transformation or Job).
+
+The *Execute a Transformation* dialog box appears. 
+You can run a transformation locally, remotely, or in a clustered
+environment. For the purposes of this exercise, keep the default *Local Execution*.
+
+-  Click *Launch*.
+
+The transformation executes. Upon running the transformation, the *Execution Results* panel opens below the
+graphical workspace.
+
+
+image:images/ktl-execution-results[Kettle text file input]
+
+The *Step Metrics* tab provides statistics for each step in your transformation
+including how many records were read, written, caused an error, processing
+speed (rows per second) and more. If any of the steps caused the
+transformation to fail,they would be highlighted in red as shown below.
+
+image:images/ktl-step-metrics-with-errors[Kettle]
+
+The Logging tab displays the logging details for the most recent execution of
+the transformation. Error lines are highlighted in red.
+
+image:images/ktl-logging-wit-errors[Kettle text file input]
+
+You can see that in this case the *Lookup Missing Zips* step caused an error
+because it attempted to lookup values on a field called +POSTALCODE2+, which did
+not exist in the lookup stream.  
+
+The *Execution History* tab provides you access
+to the Step Metrics and log information from previous executions of the
+transformation. This feature works only if you have configured your
+transformation to log to a database through the Logging tab of the
+Transformation Settings dialog. 
+
+The *Performance Graph* allows you to analyze
+the performance of steps based on a variety of metrics including how many
+records were read, written, caused an error, processing speed (rows per
+second) and more.  
+
+image:images/ktl-performance-graph[Kettle text file input]
+
+
+==== Build your first job
+
+
+Jobs are used to coordinate ETL activities such as:
+
+- Defining the flow and dependencies for what order transformations should be run
+- Preparing for execution by checking conditions such as, "Is my source file available?," or "Does a table exist?"
+- Performing bulk load database operations
+- File Management such as posting or retrieving files using FTP, copying files and deleting files
+- Sending success or failure notifications through email
+
+For this step, imagine that an external system is responsible for placing your *sales_data.csv* input in its source
+location every Saturday night at 9 p.m. You want to create a job that will check to see that the file has arrived and run
+your transformation to load the records into the database. In a subsequent exercise, you will schedule the job to be run
+every Sunday morning at 9 a.m.
+
+
+-  Click (*New*) in the upper left corner of the Spoon graphical interface.
+
+-  Select *Job* from the list.
+
+-  Expand the *General* folder and drag a *Start* job entry onto the graphical workspace..
+
+image:images/ktl-start-job[Kettle text file input]
+
+The Start job entry defines where the execution will begin.
+
+-  Expand the *Conditions* folder and add a *File Exists* job entry.
+
+-  Draw a hop from the *Start* job entry to the *File Exists* job entry.
+
+-  Double-click the *File Exists* job entry to open its edit properties dialog box. Click Browse and select the
+*sales_data.csv* from the following location: *...\design-tools\data-integration\samples
+\transformations\files*.
+
+Be sure to set the filter to CSV files to see the file.
+
+image:images/ktl-csv-filter.PNG[Kettle]
+
+-  Expand the *General* folder and add a *Transformation* job entry.
+
+-  Draw a hop between the *File Exists* and the *Transformation* job entries.
+
+-  Double-click the *Transformation* job entry to open its edit properties dialog box.
+
+- Select the *Specify by name* and directory option. Click (Browse).
+
+- Expand the repository tree to find your sample transformation. Select it and click *OK*. You likely have your
+transformation stored under the "tutorial," (not public), folder.
+//todo: change the sentence above
+
+image:images/ktl-save-job.PNG[Kettle text file input]
+
+- Save your transformation as *Sample Job*.
+
+image:images/ktl-sample-job[Kettle text file input]
+
+- Click *Run Job*. When the *Execute a Job* dialog box appears,choose *Local
+  Execution* and click *Launch*.
+
+
+image:images/ktl-execute-job[Kettle text file input]
+
+The *Execution Results* panel should open showing you the job metrics and log
+information for the job execution.
+
+
+==== Resources
+
+For more information on the configuration and administration of the 
+Pentaho Data Integration , 
+
+. Read the 'CiB end user manual' 
+. Visit  the http://community.pentaho.com/[Pentaho Community Home Page]
+
+
+=== Nesstar Publisher
+
+In this step, you are going to install the Nesstar Publisher application.
+
+Nesstar Publisher have the following main features:
+
+- The easy editing/creation of DDI documented datasets with no need to know XML
+- The ability to import and export single DDI file/language studies
+- The ability to create templates enabling your organization to standardise its use of the DDI
+- Adding default text and controlled vocabularies to templates
+- A Variable Repository to allow the sharing of variable categories within a dataset and between datasets
+- The ability to create variable groups
+- The easy setting of survey weights
+- The inclusion of frequency and summary statistics options for each variable
+- The ability to import and export data to the most common statistical formats
+- The ability to insert links to relevant websites or documents which can then be viewed within Nesstar WebView
+- Functionality to manage resources published to a Nesstar Server
+- The ability to link hierarchically related survey datasets
+
+
+==== Install Nesstar Publisher 
+
+- Download the *NesstarPublisher_v4.0.8.exe* file from the Archive server.
+
+- Double-click on the file to start the installation wizard.
+
+image:images/nesstar-welcome.PNG[missing figure nesstar Welcome]
+
+- Accept the license agreement.
+
+- Accept the default destination folder: *C:\\Program Files
+  (x86)\Nesstar\Publisher*.
+
+image:images/nesstar-location.PNG[Nesstar location]
+
+- Create the program's shortcut in the *Start -> Nesstar* menu folder.
+
+image:images/nesstar-shortcut.PNG[Nesstar menu]
+
+- Create a start menu icon, a desktop icon and a quick launch icon.
+
+image:images/nesstar-icons.PNG[Nesstar menu]
+
+- Complete the installation and launch Nesstar for the first time.
+
+image:images/nesstar-complete.PNG[Nesstar menu]
+
+You should see the screen shoot below.
+
+image:images/nesstar-ide.PNG[Nesstar menu]
+
+
+- Download the user guide.
+
+
+
+
+=== Zotero
+
+In this step, you are going to install Zotero. 
+Zotero is a free, open-source tool to help you collect, organize, cite and
+share your research sources.
+
+Zotero is available in two configurations: Zotero for Firefox and Zotero
+Standalone.
+
+
+==== Install Zotero for Firefox
+
+To install the Zotero Firefox extension, 
+
+
+- Locate the Zotero XPI file (e.g {zotero-xpi} ) on the Archive server.
+
+image:images/zotero-xpi-file.PNG[Zotero xpi file]
+
+- Drag the *{zotero-xpi}* file onto a Firefox window.
+
+image:images/zotero-install-add-ons.PNG[Zotero xpi file]
+
+- Select the file then click *Install*.
+- Restart Firefox
+
+TIP: If a box appears above the web page with “Firefox prevented this site
+(www.zotero.org) from asking you to install software on your computer.”, 
+click the “Allow” button. Then click the “Install Now” button in the “Software
+Installation” pop up window (the button may be greyed out for a few seconds
+while Firefox downloads Zotero), and restart Firefox after the installation
+has completed.
+
+You should now see the Zotero logo  in the status bar in the
+right bottom corner of your Firefox browser window.
+
+
+image:images/zotero-complete.PNG[Zotero xpi file]
+
+
+==== Install Zotero Standalone
+
+To install Zotero Standalone,
+
+- Run *{zotero-windows}* if you are running Windows 7
+- Run *{zotero-linux}* if you are running Ubuntu
+
+[NOTE]
+Word processor plugins for Microsoft Word and LibreOffice/OpenOffice are
+bundled with the Standalone Zotero. You don't need a separate installation.
+
+
+
+- Install the plug-in for Word.
+
+- Register to take full advantage of Zotero on http://www.zotero.org/start
+- email validation .
+
+
+- Read the quick start guide
+- Watch  the video tour
+
+
+
+==== Resources
+
+
+For more information on the configuration and administration of 
+the Zotero application, 
+
+
+
+. Visit http://www.zotero.org[Zotero Home] 
+
+
+
+== SysAdmin desktop installation
+
+=== Role
+
+- Routine maintenance 
+- Backup 
+
+=== Setup the virtual machine
+
+Using the instructions in <<Create-vm>> and <<Install-ubuntu>>, setup a new VM with the following
+specifications:
+
+- OS : Ubuntu Server 12.04 LTS
+- CPU : 1  
+- RAM : 2
+- Storage : 40 GB
+- IP Address: 172.18.21.231
+- Host Name: sysadmin.africacentre.local 
+
+
+=== Install vSphere Client
+
+In this step, you are going to install  vSphere Client version 5.0 on the
+SysAdmin desktop. If you use another workstation when not logged to the CiB,
+you may use the same procedure to install vSphere on that workstation.
+
+
+==== GUI tools
+
+You can refer to the <<Install-vSphere-client>>.
+
+==== CLI tools
+
+
+
+
+=== Install WireShark 
+
+
+Download the Wireshark installer from the File server and Execute it.
+
+Locate the Wireshark folder in the repository
+
+- Run the *Wireshark-win64-1.8.0.exe*.
+
+image:images/ws-welcome.PNG[Missing Figure for Wireshark]
+
+- Accept the license terms.
+
+image:images/ws-license.PNG[Missing Figure for Wireshark]
+
+- Choose *All* components.
+
+image:images/ws-components.PNG[Missing Figure for Wireshark]
+
+- Select *All* additional tasks .
+
+
+image:images/ws-additional-tasks.PNG[Missing Figure for Wireshark]
+
+
+- Install *WinPcap*.
+
+
+//image:images/ws-install-winpcap-setup.PNG[Missing Figure for Wireshark]
+
+This will launch the *WinPcap* installer.
+
+image:images/ws-winpcap-installer.PNG[Missing Figure for Wireshark]
+
+Follow the prompts and accept the default options.
+
+image:images/ws-winpcap-installer-welcome.PNG[Missing Figure for Wireshark]
+
+image:images/ws-winpcap-installer-license.PNG[Missing Figure for Wireshark]
+
+Select *Start the WinPcap driver at boot time*
+
+image:images/ws-winpcap-installer-boot.PNG[Missing Figure for Wireshark]
+
+image:images/ws-winpcap-installer-complete.PNG[Missing Figure for Wireshark]
+
+
+
+image:images/ws-complete.PNG[Missing Figure for Wireshark]
+
+Run wireshark for the first time to check if the installation is successful.
+
+image:images/ws-complete-run.PNG[Missing Figure for Wireshark]
+
+You should see the screen below.
+
+image:images/ws-startup.PNG[Missing Figure for Wireshark]
+
+==== Resources
+
+For more information on the configuration and administration of the Wireshark
+application, consult the following resources: 
+
+. Read the *CiB administration manual*.
+. Go to  http://www.mysql.com/[MySQL Home Page].
+. Consult the full documentation both online and offile format from the
+http://dev.mysql.com/doc/[MySQL Developers portal].
+
+
+
+=== Install guettoVCB backup script
+
+In this step, you are going to install and configure *guettoVCB*.
+The *guettoVCB* script takes snapshots of live running virtual machines,
+backs up the master VMDKs and upon completion, 
+deletes the snapshot until the next backup.
+
+It is a free alternative to the proprietary VMware's VCB tools.
+The only caveat is that it utilizes resources available to the Busybox console
+of the ESXi server running the backups as opposed to following the traditional
+method
+of offloading virtual machine backups through a VCB proxy.
+
+The script has been tested on ESxi 5.x and support backup on local storage.
+The script is non-iterative and will be setup to run via *cron*. 
+The script accepts a text file that lists the display name of virtual
+machines that are to be backed up. 
+Additionally, you can specify a folder containing the configuration files on
+a per VM basis for granular control over backup policies.
+
+Additionally, for CiB host that don't have persistent NFS datastores designated
+for backups, the script offers the ability to automatically connect the ESXi
+server to a NFS exported folder and then upon backup completion, disconnect it
+. The connection is established by creating an NFS datastore link which
+enables monolithic (or thick) VMDK backups as opposed to using the usual UNIX
+mount command which necessitates breaking VMDK files into the 2Gbsparse format
+for backup.
+
+In its current configuration, the script will allow up to 3 unique backups of
+the VM before it will overwrite the previous backups;
+
+
+- guettoVCB version x.xx
+
+==== Setup 
+
+- Connect to the CIB host with SSH
+    
+- Download *guettoVCB* from the file server
+
+- Extract the contents of the tarball
+
+-----
+cd 
+tar -zxvf lamw-ghettoVCB-19e0d4b.tar.gz
+-----
+
+The script is now ready to be used and is located in a directory name
+*guettoVCB*
+
+==== Configuration
+
+[source,bash]
+-----
+VM_BACKUP_VOLUME=/vmfs/volumes/backups/cib  
+DISK_BACKUP_FORMAT=thin 
+VM_BACKUP_ROTATION_COUNT=3 
+POWER_VM_DOWN_BEFORE_BACKUP=0 
+ENABLE_HARD_POWER_OFF=0  
+ITER_TO_WAIT_SHUTDOWN=3
+POWER_DOWN_TIMEOUT=5 
+
+ENABLE_COMPRESSION=0 
+ADAPTER_FORMAT=buslogic 
+VM_SNAPSHOT_MEMORY=0
+VM_SNAPSHOT_QUIESCE=0
+ENABLE_NON_PERSISTENT_NFS=0
+UNMOUNT_NFS=0
+NFS_SERVER=172.30.0.195
+NFS_MOUNT=/nfsshare
+NFS_LOCAL_NAME=nfs_storage_backup
+NFS_VM_BACKUP_DIR=daily
+SNAPSHOT_TIMEOUT=15
+EMAIL_LOG=0
+EMAIL_DEBUG=0
+EMAIL_SERVER={archive-ip-server}
+EMAIL_SERVER_PORT=25
+EMAIL_DELAY_INTERVAL=1
+EMAIL_TO= {help-email}
+EMAIL_FROM= {site-code}@indepth-ishare.org
+----
+
+==== Usage 
+
+- Create a *vms-to-backup* file with the names of the VM to be backup
+
+------
+archive
+db
+dm
+nada
+sysadm
+------
+
+- Test the script in dry mode 
+
+-----
+.guettoVCB.sh -f vms_to_backup -d dryrun
+-----
+
+- Backup VMS stored in a list
+
+-----
+./guettoVCB -f vms_to_backup
+-----
+
+
+==== Setup a cron job
+
+In this step, you are going to use a *cron* job to schedule backup every night
+at midnight evreryday and send the output to a unique log file.
+
+- Setup the cronjob bu appending the following line to
+  /var/spool/cron/crontabs/root
+//why crontab -e does not work
+
+-----
+0 0 * * 1-7 /vmfs/volumes/simple-jack-local-storage/guettoVCB.sh -f
+/vmfs/volumes/simplejack-local-storage/backuplist >
+/vmfs/voulmes/simplejack-local-storage/cib-backup-$(data +\%s).log
+-----
+
+- Verify that the crontab entry has been updated by using "cat" utility
+
+-----
+cat /var/spool/cron/crontabs/root
+-----
+
+- Restart the current cron daemon to apply the changes
+
+----
+~ # kill $(cat /var/run/crond.pid)
+~ # busybox crond
+----
+
+To ensure that this cronjob will persist through a reboot,
+add the following two lines to */etc/rc.local/*.
+
+
+-----
+/bin/kill $(cat /var/run/crond.pid)
+/bin/echo "0 0 * * 1-5 /vmfs/volumes/simplejack-local-storage/ghettoVCB.sh -f /vmfs/volumes/simplejack-local-storage/backuplist > /vmfs/volumes/simplejack-local-storage/ghettoVCB-backup-\$(date +\\%s).log" >> /var/spool/cron/crontabs/root
+/bin/busybox crond
+-----
+
+- To test your configuration, initiate manually an ESXi backup by running
+  *auto-backup.sh*
+
+----
+~ # /sbin/auto-backup.sh
+----
+
+
+==== Resources
+
+For more information on the configuration and administration of the
+*guettoVCB* application, consult the following resources: 
+
+. Read the *CiB administration manual*
+. Go to  http://communities.vmware.com/docs/DOC-8760[GhettoVCB home page]
+
+
+[appendix]
+== Annexures
+
+=== Site code 
+
+//Add how the site code is formed
+
+.Site code sorted by country, precedence
+[cols=2,grid='none',frame='none']
+|====
+|+BD011+	ICDDR-B: Matlab 
+|+BD012+	ICDDR-B: Bandarban 
+|+BD013+	ICDDR-B: Chakaria 
+|+BF011+	Kaya 
+|+BF021+	Nanoro 
+|+BF031+	Nouna 
+|+BF041+	Ouagadougou 
+|+BF051+	Sapone 
+|+CI011+	Taabo 
+|+ET011+	Butajira 
+|+ET021+	Gilgel Gibe 
+|+ET031+	Kilite Awlaelo 
+|+GH001+	INDEPTH Network 
+|+GH011+	Navrongo 
+|+GH021+	Kintampo 
+|+GH031+	Dodowa 
+|+GM011+	Farafenni 
+|+GM021+	West Kiang 
+|+GW011+	Bandim 
+|+ID011+	Purworejo 
+|+IN011+	Ballabgarh 
+|+IN021+	Vadu 
+|+KE011+	Kilifi 
+|+KE021+	Kisumu 
+|+KE031+	Nairobi 
+|+KE041+	Mbita 
+|+KH011+	Mekong 
+|+MW011+	Karonga 
+|+MZ011+	Manhica 
+|+PG011+	Wosera 
+|+SN011+	IRD: Bandafassi 
+|+SN012+	IRD: Mlomp 
+|+SN013+	IRD: Niakhar 
+|+TH011+	Kanchanaburi 
+|+TZ011+	Ifakara Health Institute: Ifakara 
+|+TZ012+	Ifakara Health Institute: Rufiji 
+|+TZ021+	Magu 
+|+UG011+	Iganga/Mayuge 
+|+UG021+	Rakai 
+|+VN011+	Hanoi Medical University: Dodalab 
+|+VN012+	Hanoi Medical University: Filabavi 
+|+VN021+	Chililab 
+|+ZA011+	Agincourt 
+|+ZA021+	Dikgale 
+|+ZA031+	Africa Centre 
+|
+|====
+
+
+=== Naming convention
+
+- Username : first letter of the first name followed by the surname, all in lower case
+- Hostname : CIB-<code site> : Example CIB-ZA031
+- analytical database :
+- Virtual machine's display name: do not use space in the name
+
+
+[glossary]
+=== Example Glossary
+
+Glossaries are optional. Glossaries entries are an example of a style
+of AsciiDoc labeled lists.
+
+[glossary]
+hypervisor::
+  The corresponding (indented) definition.
+
+VM::
+  Virtual Machine The corresponding (indented) definition.
+
+VMDK::
+  Virtual Machine DK
+
+
+
